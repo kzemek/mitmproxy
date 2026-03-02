@@ -245,6 +245,14 @@ class Message(serializable.Serializable):
 
     data: MessageData
     stream: Callable[[bytes], Iterable[bytes] | bytes] | bool = False
+    extra_content: bytes | None = None
+    """
+    If set during the `response` hook, this content will be sent to the client
+    after the streamed response body but before trailers and end-of-message.
+
+    This is useful when response streaming is enabled, as the response body has
+    already been forwarded to the client by the time the `response` hook fires.
+    """
     """
     This attribute controls if the message body should be streamed.
 

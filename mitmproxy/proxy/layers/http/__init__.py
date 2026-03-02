@@ -525,6 +525,12 @@ class HttpStream(layer.Layer):
                     ResponseData(self.stream_id, content), self.context.client
                 )
 
+        if already_streamed and self.flow.response.extra_content:
+            yield SendHttp(
+                ResponseData(self.stream_id, self.flow.response.extra_content),
+                self.context.client,
+            )
+
         if self.flow.response.trailers:
             yield SendHttp(
                 ResponseTrailers(self.stream_id, self.flow.response.trailers),
