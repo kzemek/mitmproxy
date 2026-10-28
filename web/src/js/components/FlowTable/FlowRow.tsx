@@ -1,25 +1,29 @@
 import React, { useCallback } from "react";
 import classnames from "classnames";
 import type { Flow } from "../../flow";
-import { useAppDispatch, useAppSelector } from "../../ducks";
+import { useAppDispatch } from "../../ducks";
 import { select, selectRange, selectToggle } from "../../ducks/flows";
+import { isValidColumnName } from "../../flow/utils";
 import * as columns from "./FlowColumns";
 
 type FlowRowProps = {
     flow: Flow;
     selected: boolean;
     highlighted: boolean;
+    displayColumnNames: string[];
+    rowNumber: number;
+    height: number;
 };
 
 export default React.memo(function FlowRow({
     flow,
     selected,
     highlighted,
+    displayColumnNames,
+    rowNumber,
+    height,
 }: FlowRowProps) {
     const dispatch = useAppDispatch();
-    const displayColumnNames = useAppSelector(
-        (state) => state.options.web_columns,
-    );
     const className = classnames({
         selected,
         highlighted,
@@ -30,12 +34,8 @@ export default React.memo(function FlowRow({
 
     const onClick = useCallback(
         (e: React.MouseEvent<HTMLTableRowElement>) => {
-            // a bit of a hack to disable row selection for quickactions.
-            let node = e.target as HTMLElement;
-            while (node.parentNode) {
-                if (node.classList.contains("col-quickactions")) return;
-                node = node.parentNode as HTMLElement;
-            }
+            // The quickaction buttons act on the flow themselves; the rest of their column selects the row like any other cell.
+            if ((e.target as HTMLElement).closest(".quickaction")) return;
             if (e.metaKey || e.ctrlKey) {
                 dispatch(selectToggle(flow));
             } else if (e.shiftKey) {
@@ -49,15 +49,17 @@ export default React.memo(function FlowRow({
     );
 
     const displayColumns = displayColumnNames
+        .filter(isValidColumnName)
         .map((x) => columns[x])
-        .filter((x) => x)
         .concat(columns.quickactions);
 
     return (
-        <tr className={className} onClick={onClick}>
+        <tr className={className} onClick={onClick} style={{ height }}>
             {displayColumns.map((Column) => (
-                <Column key={Column.name} flow={flow} />
+                <Column key={Column.name} flow={flow} rowNumber={rowNumber} />
             ))}
+            {/* Empty, but without a cell the row stops painting its background where the filler column starts. */}
+            <td className="col-filler" />
         </tr>
     );
 });

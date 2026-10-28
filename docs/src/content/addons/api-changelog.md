@@ -31,10 +31,12 @@ This means that addons should now use standard logging functionality instead of 
 ```python
 # Deprecated:
 from mitmproxy import ctx
+
 ctx.log.info("hello world")
 
 # New:
 import logging
+
 logging.info("hello world")
 ```
 
@@ -70,7 +72,7 @@ As the passed objects are different now, we've also taken this opportunity to in
 #### Logging
 
 The `log` event has been renamed to `add_log`. This fixes a consistent source of errors where users imported 
-modules with the name "log", which were then inadvertedly picked up.
+modules with the name "log", which were then inadvertently picked up.
 
 #### Contentviews
 

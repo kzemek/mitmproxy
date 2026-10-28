@@ -169,7 +169,9 @@ def parse_http_basic_auth(s: str) -> tuple[str, str, str]:
         raise ValueError("Unknown scheme")
     try:
         user, password = (
-            binascii.a2b_base64(authinfo.encode()).decode("utf8", "replace").split(":")
+            binascii.a2b_base64(authinfo.encode())
+            .decode("utf8", "replace")
+            .split(":", 1)
         )
     except binascii.Error as e:
         raise ValueError(str(e))
@@ -281,10 +283,14 @@ class Ldap(Validator):
         except ValueError:
             raise exceptions.OptionsError(f"Invalid LDAP specification: {spec}")
 
+    def make_search_filter(self, username: str) -> str:
+        username = ldap3.utils.conv.escape_filter_chars(username)
+        return f"({self.filter_key}={username})"
+
     def __call__(self, username: str, password: str) -> bool:
         if not username or not password:
             return False
-        self.conn.search(self.dn_subtree, f"({self.filter_key}={username})")
+        self.conn.search(self.dn_subtree, self.make_search_filter(username))
         if self.conn.response:
             c = ldap3.Connection(
                 self.server, self.conn.response[0]["dn"], password, auto_bind=True

@@ -6,7 +6,10 @@ import { calcVScroll } from "./helpers/VirtualScroll";
 import FlowTableHead from "./FlowTable/FlowTableHead";
 import FlowRow from "./FlowTable/FlowRow";
 import type { Flow } from "../flow";
-import type { RootState } from "../ducks";
+import type { AppDispatch, RootState } from "../ducks";
+import { isValidColumnName } from "../flow/utils";
+import type { ColumnWidths } from "../ducks/ui/columnWidths";
+import { commitColumnWidths, setColumnWidths } from "../ducks/ui/columnWidths";
 
 type FlowTableProps = {
     flowView: Flow[];
@@ -15,6 +18,10 @@ type FlowTableProps = {
     selectedIds: Set<string>;
     onlySelectedId: string | false;
     firstSelectedIndex: number | undefined;
+    displayColumnNames: string[];
+    listIndex: Map<string, number>;
+    columnWidths: ColumnWidths;
+    dispatch: AppDispatch;
 };
 
 type FlowTableState = {
@@ -32,14 +39,24 @@ export class PureFlowTable extends React.Component<
     private viewport = React.createRef<HTMLDivElement>();
     private head = React.createRef<HTMLTableSectionElement>();
 
-    constructor(props, context) {
-        super(props, context);
+    constructor(props: FlowTableProps) {
+        super(props);
 
         this.state = {
             vScroll: calcVScroll(),
             viewportTop: 0,
         };
         this.onViewportUpdate = this.onViewportUpdate.bind(this);
+        this.onColumnResize = this.onColumnResize.bind(this);
+        this.onColumnResizeEnd = this.onColumnResizeEnd.bind(this);
+    }
+
+    onColumnResize(widths: ColumnWidths) {
+        this.props.dispatch(setColumnWidths(widths));
+    }
+
+    onColumnResizeEnd(widths: ColumnWidths) {
+        this.props.dispatch(commitColumnWidths(widths));
     }
 
     componentDidMount() {
@@ -58,12 +75,30 @@ export class PureFlowTable extends React.Component<
     componentDidUpdate(
         prevProps: FlowTableProps,
         prevState: FlowTableState,
-        snapshot,
+        snapshot: boolean,
     ) {
+        void prevState;
         if (snapshot) {
             autoscroll.adjustScrollTop(this.viewport);
         }
-        this.onViewportUpdate();
+        // Only recompute the virtual-scroll window when the flow list
+        // or the row height actually changed. Other call sites still
+        // drive onViewportUpdate as needed (componentDidMount, the
+        // resize listener, the viewport onScroll, the post-scroll-into-
+        // view call). Calling it unconditionally from here let
+        // setState -> componentDidUpdate -> setState spin whenever
+        // vScroll.end * rowHeight was less than scrollTop: the capped
+        // Math.min(scrollTop, vScroll.end * rowHeight) stayed strictly
+        // below scrollTop and the `state.viewportTop !== scrollTop`
+        // setState condition kept re-firing.
+        if (
+            prevProps.flowView !== this.props.flowView ||
+            prevProps.rowHeight !== this.props.rowHeight ||
+            // Widening past the viewport adds a horizontal scrollbar, which eats into the height the virtual scroll window is derived from.
+            prevProps.columnWidths !== this.props.columnWidths
+        ) {
+            this.onViewportUpdate();
+        }
 
         const { onlySelectedId } = this.props;
 
@@ -124,7 +159,26 @@ export class PureFlowTable extends React.Component<
 
     render() {
         const { vScroll, viewportTop } = this.state;
-        const { flowView, selectedIds, highlightedIds } = this.props;
+        const {
+            flowView,
+            selectedIds,
+            highlightedIds,
+            displayColumnNames,
+            listIndex,
+            rowHeight,
+            columnWidths,
+        } = this.props;
+
+        const orderedColumns = displayColumnNames
+            .filter(isValidColumnName)
+            .concat("quickactions");
+
+        // One column has to stay flexible and take the space the others leave over, or the browser spreads that space over the widths the user dragged.
+        // `path` does it until the user has pinned every other column, and the filler from then on: an absorber to the left of the drag would slide the boundary out from under the cursor.
+        // The actions column never does, as it only shows its buttons over the row on hover.
+        const fillerAbsorbsSlack = orderedColumns.every(
+            (col) => col === "quickactions" || columnWidths[col],
+        );
 
         return (
             <div
@@ -133,11 +187,29 @@ export class PureFlowTable extends React.Component<
                 ref={this.viewport}
             >
                 <table>
+                    <colgroup>
+                        {orderedColumns.map((colName) => (
+                            <col
+                                key={colName}
+                                className={`col-${colName}`}
+                                style={{ width: columnWidths[colName] }}
+                            />
+                        ))}
+                        <col
+                            className="col-filler"
+                            style={{
+                                width: fillerAbsorbsSlack ? "auto" : undefined,
+                            }}
+                        />
+                    </colgroup>
                     <thead
                         ref={this.head}
                         style={{ transform: `translateY(${viewportTop}px)` }}
                     >
-                        <FlowTableHead />
+                        <FlowTableHead
+                            onResize={this.onColumnResize}
+                            onResizeEnd={this.onColumnResizeEnd}
+                        />
                     </thead>
                     <tbody>
                         <tr style={{ height: vScroll.paddingTop }} />
@@ -149,6 +221,9 @@ export class PureFlowTable extends React.Component<
                                     flow={flow}
                                     selected={selectedIds.has(flow.id)}
                                     highlighted={highlightedIds.has(flow.id)}
+                                    displayColumnNames={displayColumnNames}
+                                    rowNumber={listIndex.get(flow.id)!}
+                                    height={rowHeight}
                                 />
                             ))}
                         <tr style={{ height: vScroll.paddingBottom }} />
@@ -166,4 +241,11 @@ export default connect((state: RootState) => ({
     onlySelectedId:
         state.flows.selected.length === 1 && state.flows.selected[0].id,
     firstSelectedIndex: state.flows._viewIndex.get(state.flows.selected[0]?.id),
+    // Fetch column names once at the table level; avoids N identical
+    // useAppSelector subscriptions inside each FlowRow.
+    displayColumnNames: state.options.web_columns,
+    // Pass list index so the # column shows the original flow number
+    // (list position), not the view position after sort/filter.
+    listIndex: state.flows._listIndex,
+    columnWidths: state.ui.columnWidths,
 }))(PureFlowTable);

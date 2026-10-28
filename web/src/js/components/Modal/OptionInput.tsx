@@ -6,7 +6,7 @@ import { update as updateOptions } from "../../ducks/options";
 import classnames from "classnames";
 import { useAppDispatch, useAppSelector } from "../../ducks";
 
-const stopPropagation = (e) => {
+const stopPropagation = (e: React.KeyboardEvent<HTMLElement>) => {
     if (e.key !== "Escape") {
         e.stopPropagation();
     }
@@ -69,6 +69,18 @@ function NumberOption({ value, onChange, ...props }: OptionProps<number>) {
     );
 }
 
+function FloatOption({ value, onChange, ...props }: OptionProps<number>) {
+    return (
+        <input
+            type="number"
+            step="any"
+            value={value}
+            onChange={(e) => onChange(parseFloat(e.target.value))}
+            {...props}
+        />
+    );
+}
+
 interface ChoiceOptionProps extends OptionProps<string> {
     choices: string[];
 }
@@ -103,7 +115,7 @@ function StringSequenceOption({
 
     const [textAreaValue, setTextAreaValue] = React.useState(value.join("\n"));
 
-    const handleChange = (e) => {
+    const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const newValue = e.target.value;
         setTextAreaValue(newValue); //save in the state the current input value
         onChange(
@@ -129,6 +141,7 @@ export const Options = {
     bool: BooleanOption,
     str: StringOption,
     int: NumberOption,
+    float: FloatOption,
     "optional str": Optional(StringOption),
     "optional int": Optional(NumberOption),
     "sequence of str": StringSequenceOption,
@@ -148,7 +161,7 @@ function PureOption({ choices, type, value, onChange, name, error }) {
         if (!Opt) throw `unknown option type ${type}`;
     }
     if (Opt !== BooleanOption) {
-        props.className = "form-control";
+        props.className = "input";
     }
 
     return (

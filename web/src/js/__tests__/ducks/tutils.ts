@@ -79,6 +79,7 @@ export const testState: RootState = {
             [FilterName.Search]: "~u /second | ~tcp | ~dns | ~udp",
             [FilterName.Highlight]: "~u /path",
         },
+        columnWidths: {},
     },
     options: defaultOptions,
     flows: {
@@ -95,6 +96,7 @@ export const testState: RootState = {
             desc: true,
             column: "path",
         },
+        orderReversed: false,
         view: [tflow1, tflow2, tflow3, tflow4],
         list: [tflow0, tflow1, tflow2, tflow3, tflow4],
         _listIndex: new Map<string, number>([

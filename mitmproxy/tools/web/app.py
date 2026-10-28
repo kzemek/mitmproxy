@@ -608,8 +608,10 @@ class FlowHandler(RequestHandler):
                 elif a == "response" and hasattr(flow, "response"):
                     response: mitmproxy.http.Response = flow.response
                     for k, v in b.items():
-                        if k in ["msg", "http_version"]:
-                            setattr(response, k, str(v))
+                        if k == "reason":
+                            response.reason = str(v)
+                        elif k == "http_version":
+                            response.http_version = str(v)
                         elif k == "code":
                             response.status_code = int(v)
                         elif k == "headers":
@@ -925,6 +927,9 @@ class Application(tornado.web.Application):
             template_path=os.path.join(os.path.dirname(__file__), "templates"),
             static_path=os.path.join(os.path.dirname(__file__), "static"),
             xsrf_cookies=True,
+            # https://github.com/mitmproxy/mitmproxy/issues/8194
+            # 2026-05: We can move back to the default cookie name in a few years.
+            xsrf_cookie_name="_mitmproxy_xsrf",
             xsrf_cookie_kwargs=dict(samesite="Strict"),
             cookie_secret=secrets.token_bytes(32),
             debug=debug,
